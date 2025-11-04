@@ -17,6 +17,14 @@ A high-performance Go tool for generating large volumes of realistic test data t
 - MongoDB Atlas cluster (or any MongoDB instance)
 - Network access to MongoDB cluster from client VM
 
+## Configuration
+
+**Important**: Never commit MongoDB connection strings with credentials to version control. Use environment variables instead:
+
+```bash
+export MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
+```
+
 ## Installation
 
 ```bash
@@ -37,7 +45,14 @@ go build -o bin/gendata ./cmd/gendata
 
 ```bash
 ./bin/gendata \
-  --connection "mongodb+srv://user:pass@cluster.mongodb.net/" \
+  --connection "$MONGODB_URI" \
+  --size 1TB
+```
+
+Or with an explicit connection string:
+```bash
+./bin/gendata \
+  --connection "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/" \
   --size 1TB
 ```
 
@@ -45,7 +60,7 @@ go build -o bin/gendata ./cmd/gendata
 
 ```bash
 ./bin/gendata \
-  --connection "mongodb+srv://user:pass@cluster.mongodb.net/" \
+  --connection "$MONGODB_URI" \
   --database testdb \
   --collection customers \
   --size 1TB \
@@ -58,7 +73,7 @@ go build -o bin/gendata ./cmd/gendata
 
 ### Command Line Options
 
-- `--connection` (required): MongoDB connection string
+- `--connection` (required): MongoDB connection string (use `$MONGODB_URI` environment variable or provide connection string)
 - `--database`: Database name (default: `testdb`)
 - `--collection`: Collection name (default: `customers`)
 - `--size`: Target data size (e.g., `1TB`, `500GB`, `32TB`)
@@ -83,7 +98,7 @@ For optimal performance targeting 1 TB in 30 minutes (550+ MB/s):
 
 ```bash
 ./bin/gendata \
-  --connection "mongodb+srv://user:pass@cluster.mongodb.net/" \
+  --connection "$MONGODB_URI" \
   --size 1TB \
   --doc-size 16KB \
   --workers 16 \
