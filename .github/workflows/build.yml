@@ -72,7 +72,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     permissions:
       contents: write
     
@@ -92,7 +92,7 @@ jobs:
           find release-assets -type f -name "*.sha256" -exec cp {} release/ \;
           
           # Create a README with download links
-          cat > release/README.md << 'EOF'
+          cat > release/README.md << EOF
           # Download Binaries
           
           Download the appropriate binary for your Linux platform:
@@ -100,45 +100,56 @@ jobs:
           - **Linux x86_64 (amd64)**: [gendata-linux-amd64](gendata-linux-amd64)
           - **Linux ARM64**: [gendata-linux-arm64](gendata-linux-arm64)
           
-          Each binary includes a corresponding `.sha256` checksum file for verification.
+          Each binary includes a corresponding \`.sha256\` checksum file for verification.
           
           ## Quick Download
           
-          ```bash
+          \`\`\`bash
           # For x86_64
-          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-amd64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-amd64
           chmod +x gendata
           
           # For ARM64
-          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-arm64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-arm64
           chmod +x gendata
-          ```
+          \`\`\`
           
           ## Verify Checksum
           
-          ```bash
+          \`\`\`bash
           # Download checksum
-          curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-amd64.sha256
+          curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-amd64.sha256
           
           # Verify
           shasum -a 256 -c gendata-linux-amd64.sha256
-          ```
+          \`\`\`
           EOF
           
           cd release
           ls -lah
 
-      - name: Extract tag name
-        id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Extract tag or commit
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            IS_PRERELEASE=false
+          else
+            VERSION="latest-$(git rev-parse --short HEAD)"
+            IS_PRERELEASE=true
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: release/*
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
           generate_release_notes: true
-          name: Release ${{ steps.tag.outputs.tag }}
+          name: Release ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

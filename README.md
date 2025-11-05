@@ -28,17 +28,34 @@ export MONGODB_URI=
 
 ### Download Pre-built Binaries
 
-Download the latest release binary for your platform from [GitHub Releases](https://github.com/meticulous-dft/mongodb-data-generator/releases):
+#### From GitHub Releases
+
+Download binaries from [GitHub Releases](https://github.com/meticulous-dft/mongodb-data-generator/releases):
+
+- **Latest release** (tagged releases): Use the `latest` release tag
+- **Development builds**: Look for releases tagged `latest-<commit-hash>`
 
 ```bash
-# For Linux x86_64
+# For Linux x86_64 (latest release)
 curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-linux-amd64
 chmod +x gendata
 
-# For Linux ARM64
+# For Linux ARM64 (latest release)
 curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-linux-arm64
 chmod +x gendata
 ```
+
+#### From Workflow Artifacts
+
+If a release hasn't been created yet, you can download binaries from the workflow artifacts:
+
+1. Go to the [Actions tab](https://github.com/meticulous-dft/mongodb-data-generator/actions)
+2. Click on the latest successful workflow run
+3. Scroll down to "Artifacts" section
+4. Download the appropriate artifact for your platform (e.g., `gendata-linux-amd64` or `gendata-linux-arm64`)
+5. Extract and use the binary
+
+**Note**: Artifacts are retained for 90 days.
 
 ### Build from Source
 
