@@ -279,9 +279,145 @@ func formatDuration(d time.Duration) string {
 	return strings.Join(parts, " ")
 }
 
-// Close closes the log file
+// Close closes the log file and writes final statistics
 func (l *YCSBLogger) Close() error {
-	// Write final stats
-	l.WriteStats()
+	// Write final statistics summary in multi-line format
+	l.WriteFinalStats()
 	return l.file.Close()
+}
+
+// WriteFinalStats writes comprehensive final statistics in multi-line YCSB format
+func (l *YCSBLogger) WriteFinalStats() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	elapsed := time.Since(l.startTime)
+	elapsedMs := elapsed.Milliseconds()
+	totalOps := int64(len(l.operations))
+
+	if totalOps == 0 {
+		return nil
+	}
+
+	// Calculate overall throughput
+	throughput := float64(totalOps) / elapsed.Seconds()
+
+	// Write overall stats
+	l.file.WriteString(fmt.Sprintf("[OVERALL], RunTime(ms), %d\n", elapsedMs))
+	
+	// Format timestamp for final stats lines
+	timestamp := time.Now().Format("[2006/01/02 15:04:05.000]")
+	
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [OVERALL], Throughput(ops/sec), %.15f\n",
+		timestamp, l.workloadName, throughput))
+
+	// Group operations by type
+	opsByType := make(map[string][]Operation)
+	for _, op := range l.operations {
+		opsByType[op.Type] = append(opsByType[op.Type], op)
+	}
+
+	// Write stats for each operation type
+	for opType, ops := range opsByType {
+		l.writeFinalOperationStats(opType, ops, timestamp)
+	}
+
+	return l.file.Sync()
+}
+
+// writeFinalOperationStats writes comprehensive statistics for an operation type in multi-line format
+func (l *YCSBLogger) writeFinalOperationStats(opType string, ops []Operation, timestamp string) {
+	if len(ops) == 0 {
+		return
+	}
+
+	// Extract latencies
+	latencies := make([]int64, len(ops))
+	var totalLatency int64
+	successCount := int64(0)
+	errorCount := int64(0)
+
+	for i, op := range ops {
+		latencies[i] = op.LatencyUs
+		totalLatency += op.LatencyUs
+		if op.Success {
+			successCount++
+		} else {
+			errorCount++
+		}
+	}
+
+	// Sort latencies for percentile calculation
+	sort.Slice(latencies, func(i, j int) bool {
+		return latencies[i] < latencies[j]
+	})
+
+	// Calculate statistics
+	avgLatency := float64(totalLatency) / float64(len(ops))
+	minLatency := latencies[0]
+	maxLatency := latencies[len(latencies)-1]
+
+	// Calculate percentiles
+	p50Index := int(float64(len(latencies)) * 0.50)
+	p95Index := int(float64(len(latencies)) * 0.95)
+	p99Index := int(float64(len(latencies)) * 0.99)
+	p999Index := int(float64(len(latencies)) * 0.999)
+	p9999Index := int(float64(len(latencies)) * 0.9999)
+	p99999Index := int(float64(len(latencies)) * 0.99999)
+
+	if p50Index >= len(latencies) {
+		p50Index = len(latencies) - 1
+	}
+	if p95Index >= len(latencies) {
+		p95Index = len(latencies) - 1
+	}
+	if p99Index >= len(latencies) {
+		p99Index = len(latencies) - 1
+	}
+	if p999Index >= len(latencies) {
+		p999Index = len(latencies) - 1
+	}
+	if p9999Index >= len(latencies) {
+		p9999Index = len(latencies) - 1
+	}
+	if p99999Index >= len(latencies) {
+		p99999Index = len(latencies) - 1
+	}
+
+	p50Latency := latencies[p50Index]
+	p95Latency := latencies[p95Index]
+	p99Latency := latencies[p99Index]
+	p999Latency := latencies[p999Index]
+	p9999Latency := latencies[p9999Index]
+	p99999Latency := latencies[p99999Index]
+
+	// Write multi-line statistics
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], Operations, %d\n",
+		timestamp, l.workloadName, opType, len(ops)))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], AverageLatency(us), %.15f\n",
+		timestamp, l.workloadName, opType, avgLatency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], MinLatency(us), %d\n",
+		timestamp, l.workloadName, opType, minLatency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], MaxLatency(us), %d\n",
+		timestamp, l.workloadName, opType, maxLatency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 50thPercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p50Latency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 95thPercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p95Latency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 99thPercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p99Latency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 99.9PercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p999Latency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 99.99PercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p9999Latency))
+	l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], 99.999PercentileLatency(us), %d\n",
+		timestamp, l.workloadName, opType, p99999Latency))
+	if successCount > 0 {
+		l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], Return=OK, Count, %d\n",
+			timestamp, l.workloadName, opType, successCount))
+	}
+	if errorCount > 0 {
+		l.file.WriteString(fmt.Sprintf("%s [info   ] [%s] [%s], Return=ERROR, Count, %d\n",
+			timestamp, l.workloadName, opType, errorCount))
+	}
 }
