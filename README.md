@@ -27,10 +27,34 @@ export MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
 
 ## Installation
 
+### Download Pre-built Binaries
+
+Download the latest release binary for your platform from [GitHub Releases](https://github.com/meticulous-dft/mongodb-data-generator/releases):
+
+```bash
+# For Linux x86_64
+curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-linux-amd64
+chmod +x gendata
+
+# For Linux ARM64
+curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-linux-arm64
+chmod +x gendata
+
+# For macOS x86_64
+curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-darwin-amd64
+chmod +x gendata
+
+# For macOS ARM64 (Apple Silicon)
+curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-darwin-arm64
+chmod +x gendata
+```
+
+### Build from Source
+
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd data-generator
+git clone https://github.com/meticulous-dft/mongodb-data-generator.git
+cd mongodb-data-generator
 
 # Build the tool
 make build

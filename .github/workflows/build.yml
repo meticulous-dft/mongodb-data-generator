@@ -1,0 +1,165 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goarch: arm64
+          - os: windows
+            arch: amd64
+            goarch: amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          BINARY_NAME="gendata"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            BINARY_NAME="gendata.exe"
+          fi
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" -o "dist/gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" ./cmd/gendata
+          echo "Binary built: gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}"
+
+      - name: Create checksum
+        working-directory: dist
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            certutil -hashfile "gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" SHA256 > "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
+          else
+            shasum -a 256 "gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" > "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
+          fi
+          cat "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gendata-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}
+            dist/gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256
+          retention-days: 90
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find release-assets -type f -name "gendata-*" ! -name "*.sha256" -exec cp {} release/ \;
+          find release-assets -type f -name "*.sha256" -exec cp {} release/ \;
+          
+          # Create a README with download links
+          cat > release/README.md << 'EOF'
+          # Download Binaries
+          
+          Download the appropriate binary for your platform:
+          
+          - **Linux x86_64 (amd64)**: [gendata-linux-amd64](gendata-linux-amd64)
+          - **Linux ARM64**: [gendata-linux-arm64](gendata-linux-arm64)
+          - **macOS x86_64 (amd64)**: [gendata-darwin-amd64](gendata-darwin-amd64)
+          - **macOS ARM64 (Apple Silicon)**: [gendata-darwin-arm64](gendata-darwin-arm64)
+          - **Windows x86_64 (amd64)**: [gendata-windows-amd64.exe](gendata-windows-amd64.exe)
+          
+          Each binary includes a corresponding `.sha256` checksum file for verification.
+          
+          ## Quick Download (Linux)
+          
+          ```bash
+          # For x86_64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-amd64
+          chmod +x gendata
+          
+          # For ARM64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-arm64
+          chmod +x gendata
+          ```
+          
+          ## Verify Checksum
+          
+          ```bash
+          # Download checksum
+          curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/gendata-linux-amd64.sha256
+          
+          # Verify
+          shasum -a 256 -c gendata-linux-amd64.sha256
+          ```
+          EOF
+          
+          cd release
+          ls -lah
+
+      - name: Extract tag name
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          name: Release ${{ steps.tag.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
