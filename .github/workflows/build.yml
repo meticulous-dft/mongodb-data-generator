@@ -22,16 +22,6 @@ jobs:
           - os: linux
             arch: arm64
             goarch: arm64
-          - os: darwin
-            arch: amd64
-            goarch: amd64
-          - os: darwin
-            arch: arm64
-            goarch: arm64
-          - os: windows
-            arch: amd64
-            goarch: amd64
-            ext: .exe
 
     steps:
       - name: Checkout code
@@ -40,7 +30,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
 
       - name: Get version
         id: version
@@ -60,21 +50,13 @@ jobs:
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          BINARY_NAME="gendata"
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            BINARY_NAME="gendata.exe"
-          fi
-          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" -o "dist/gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" ./cmd/gendata
-          echo "Binary built: gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}"
+          go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" -o "dist/gendata-${{ matrix.os }}-${{ matrix.arch }}" ./cmd/gendata
+          echo "Binary built: gendata-${{ matrix.os }}-${{ matrix.arch }}"
 
       - name: Create checksum
         working-directory: dist
         run: |
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            certutil -hashfile "gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" SHA256 > "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
-          else
-            shasum -a 256 "gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}" > "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
-          fi
+          shasum -a 256 "gendata-${{ matrix.os }}-${{ matrix.arch }}" > "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
           cat "gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256"
 
       - name: Upload artifacts
@@ -82,7 +64,7 @@ jobs:
         with:
           name: gendata-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            dist/gendata-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext || '' }}
+            dist/gendata-${{ matrix.os }}-${{ matrix.arch }}
             dist/gendata-${{ matrix.os }}-${{ matrix.arch }}.sha256
           retention-days: 90
 
@@ -113,17 +95,14 @@ jobs:
           cat > release/README.md << 'EOF'
           # Download Binaries
           
-          Download the appropriate binary for your platform:
+          Download the appropriate binary for your Linux platform:
           
           - **Linux x86_64 (amd64)**: [gendata-linux-amd64](gendata-linux-amd64)
           - **Linux ARM64**: [gendata-linux-arm64](gendata-linux-arm64)
-          - **macOS x86_64 (amd64)**: [gendata-darwin-amd64](gendata-darwin-amd64)
-          - **macOS ARM64 (Apple Silicon)**: [gendata-darwin-arm64](gendata-darwin-arm64)
-          - **Windows x86_64 (amd64)**: [gendata-windows-amd64.exe](gendata-windows-amd64.exe)
           
           Each binary includes a corresponding `.sha256` checksum file for verification.
           
-          ## Quick Download (Linux)
+          ## Quick Download
           
           ```bash
           # For x86_64

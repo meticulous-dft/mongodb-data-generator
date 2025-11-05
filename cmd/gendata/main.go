@@ -13,9 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minghe/data-generator/internal/generator"
-	"github.com/minghe/data-generator/internal/model"
-	"github.com/minghe/data-generator/internal/mongo"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/generator"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/logger"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/model"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/mongo"
 )
 
 func main() {
@@ -29,31 +30,32 @@ func main() {
 		writers          = flag.Int("writers", 0, "Number of MongoDB writer workers (0 = auto)")
 		batchSize        = flag.Int("batch-size", 0, "Batch size for MongoDB writes (0 = auto)")
 		verbose          = flag.Bool("verbose", false, "Verbose logging")
+		logFile          = flag.String("log-file", "ycsb.log", "YCSB-style log file path")
 	)
-	
+
 	flag.Parse()
-	
+
 	if *connectionString == "" {
 		log.Fatal("Error: --connection is required")
 	}
-	
+
 	// Parse target size
 	targetBytes, err := parseSize(*targetSize)
 	if err != nil {
 		log.Fatalf("Error parsing target size: %v", err)
 	}
-	
+
 	// Determine document size
 	docSizeKB, err := determineDocumentSize(*docSize, targetBytes)
 	if err != nil {
 		log.Fatalf("Error determining document size: %v", err)
 	}
-	
+
 	if *verbose {
 		log.Printf("Target size: %s (%d bytes)", *targetSize, targetBytes)
 		log.Printf("Document size: %dKB", docSizeKB/1024)
 	}
-	
+
 	// Auto-tune workers and batch size for performance
 	if *workers == 0 {
 		*workers = runtime.NumCPU() * 2
@@ -64,15 +66,29 @@ func main() {
 	if *batchSize == 0 {
 		*batchSize = 2000 // Larger batches for better throughput
 	}
-	
+
 	if *verbose {
 		log.Printf("Workers: %d, Writers: %d, Batch size: %d", *workers, *writers, *batchSize)
 	}
-	
+
+	// Initialize YCSB logger
+	ycsbLogger, err := logger.NewYCSBLogger(*logFile)
+	if err != nil {
+		log.Fatalf("Failed to create YCSB logger: %v", err)
+	}
+	defer ycsbLogger.Close()
+
+	if *verbose {
+		log.Printf("YCSB logging to: %s", *logFile)
+	}
+
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
+	// Start periodic YCSB logging (every 10 seconds)
+	go ycsbLogger.StartPeriodicLogging(ctx)
+
 	// Handle signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -81,15 +97,15 @@ func main() {
 		log.Println("\nShutting down...")
 		cancel()
 	}()
-	
+
 	// Create generator service
 	genService := generator.NewService(generator.Config{
 		DocumentSize: docSizeKB,
 		WorkerCount:  *workers,
-		BatchSize:   *batchSize,
-		TargetBytes: targetBytes,
+		BatchSize:    *batchSize,
+		TargetBytes:  targetBytes,
 	})
-	
+
 	// Create MongoDB writer
 	mongoWriter, err := mongo.NewWriter(mongo.Config{
 		ConnectionString: *connectionString,
@@ -98,28 +114,29 @@ func main() {
 		BatchSize:        *batchSize,
 		WriterCount:      *writers,
 		TargetBytes:      targetBytes,
+		YCSBLogger:       ycsbLogger,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create MongoDB writer: %v", err)
 	}
 	defer mongoWriter.Close()
-	
+
 	// Start progress reporter
 	progressDone := make(chan bool)
 	go reportProgress(ctx, genService, mongoWriter, progressDone)
-	
+
 	// Start generation in background
 	genErrChan := make(chan error, 1)
 	go func() {
 		genErrChan <- genService.Generate(ctx)
 	}()
-	
+
 	// Start writing in background
 	writeErrChan := make(chan error, 1)
 	go func() {
 		writeErrChan <- mongoWriter.Write(ctx, genService.Documents())
 	}()
-	
+
 	// Wait for completion or error
 	select {
 	case err := <-genErrChan:
@@ -133,11 +150,11 @@ func main() {
 	case <-ctx.Done():
 		// Shutdown requested
 	}
-	
+
 	// Wait a bit for progress reporter to finish
 	time.Sleep(500 * time.Millisecond)
 	close(progressDone)
-	
+
 	// Print final stats
 	printFinalStats(genService, mongoWriter)
 }
@@ -145,7 +162,7 @@ func main() {
 // parseSize parses size strings like "1TB", "500GB", etc.
 func parseSize(sizeStr string) (int64, error) {
 	sizeStr = strings.ToUpper(strings.TrimSpace(sizeStr))
-	
+
 	var multiplier int64 = 1
 	if strings.HasSuffix(sizeStr, "TB") {
 		multiplier = 1024 * 1024 * 1024 * 1024
@@ -163,12 +180,12 @@ func parseSize(sizeStr string) (int64, error) {
 		multiplier = 1
 		sizeStr = strings.TrimSuffix(sizeStr, "B")
 	}
-	
+
 	value, err := strconv.ParseFloat(sizeStr, 64)
 	if err != nil {
 		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
 	}
-	
+
 	return int64(value * float64(multiplier)), nil
 }
 
@@ -193,21 +210,21 @@ func determineDocumentSize(docSizeStr string, targetBytes int64) (model.Document
 			return 0, fmt.Errorf("invalid document size: %s", docSizeStr)
 		}
 	}
-	
+
 	// Auto-select based on target size
-	// For very large targets, use larger documents for better throughput
-	if targetBytes >= 32*1024*1024*1024*1024 { // 32TB
+	// Scale document size down a notch: use smaller documents for better granularity
+	if targetBytes >= 8*1024*1024*1024*1024 { // >= 8TB
 		return model.Size64KB, nil
-	} else if targetBytes >= 16*1024*1024*1024*1024 { // 16TB
+	} else if targetBytes >= 4*1024*1024*1024*1024 { // >= 4TB
 		return model.Size32KB, nil
-	} else if targetBytes >= 8*1024*1024*1024*1024 { // 8TB
+	} else if targetBytes >= 2*1024*1024*1024*1024 { // >= 2TB
 		return model.Size16KB, nil
-	} else if targetBytes >= 4*1024*1024*1024*1024 { // 4TB
+	} else if targetBytes >= 1*1024*1024*1024*1024 { // >= 1TB
 		return model.Size8KB, nil
-	} else if targetBytes >= 2*1024*1024*1024*1024 { // 2TB
+	} else if targetBytes >= 100*1024*1024*1024 { // >= 100GB
 		return model.Size4KB, nil
 	} else {
-		return model.Size2KB, nil
+		return model.Size2KB, nil // < 100GB
 	}
 }
 
@@ -215,7 +232,7 @@ func determineDocumentSize(docSizeStr string, targetBytes int64) (model.Document
 func reportProgress(ctx context.Context, genService *generator.Service, mongoWriter *mongo.Writer, done chan bool) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -225,10 +242,10 @@ func reportProgress(ctx context.Context, genService *generator.Service, mongoWri
 		case <-ticker.C:
 			genStats := genService.GetStats()
 			writeStats := mongoWriter.GetStats()
-			
+
 			genMBps := genStats.BytesPerSecond / (1024 * 1024)
 			writeMBps := writeStats.BytesPerSecond / (1024 * 1024)
-			
+
 			fmt.Printf("\r[Gen: %d docs, %.2f MB/s] [Write: %d docs, %.2f MB/s] [Total: %.2f GB]",
 				genStats.DocumentsGenerated,
 				genMBps,
@@ -245,9 +262,9 @@ func reportProgress(ctx context.Context, genService *generator.Service, mongoWri
 func printFinalStats(genService *generator.Service, mongoWriter *mongo.Writer) {
 	genStats := genService.GetStats()
 	writeStats := mongoWriter.GetStats()
-	
+
 	elapsed := writeStats.LastUpdate.Sub(writeStats.StartTime)
-	
+
 	fmt.Printf("\n\n=== Final Statistics ===\n")
 	fmt.Printf("Total time: %v\n", elapsed.Round(time.Second))
 	fmt.Printf("Documents generated: %d\n", genStats.DocumentsGenerated)
@@ -263,4 +280,3 @@ func printFinalStats(genService *generator.Service, mongoWriter *mongo.Writer) {
 	)
 	fmt.Printf("Throughput: %.2f GB/min\n", float64(writeStats.BytesWritten)/(1024*1024*1024)/elapsed.Minutes())
 }
-

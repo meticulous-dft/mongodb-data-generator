@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minghe/data-generator/internal/model"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 
