@@ -87,6 +87,13 @@ go build -o bin/gendata ./cmd/gendata
 - `--collection`: Collection name (default: `customers`)
 - `--size`: Target data size (e.g., `1TB`, `500GB`, `32TB`)
 - `--doc-size`: Document size (`2KB`, `4KB`, `8KB`, `16KB`, `32KB`, `64KB`, or `auto`)
+  - **Auto mode scaling**: 
+    - `< 100GB`: 2KB documents
+    - `< 1TB`: 4KB documents
+    - `< 2TB`: 8KB documents
+    - `< 4TB`: 16KB documents
+    - `< 8TB`: 32KB documents
+    - `>= 8TB`: 64KB documents
 - `--workers`: Number of generator workers (default: `CPU count * 2`)
 - `--writers`: Number of MongoDB writer workers (default: `CPU count`)
 - `--batch-size`: Batch size for MongoDB writes (default: `2000`)
@@ -111,6 +118,24 @@ Generated documents follow a customer/order schema with:
 - Order history with line items
 - Metadata, notes, and tags
 - Padding to reach exact target document size
+
+The document structure scales with target size to ensure meaningful data is the majority (>80%) of each document, with padding limited to <20%. For example:
+- **2KB documents**: Minimal structure (customer + 1 address + 1 payment, no orders)
+- **64KB documents**: Full structure with 12-14 orders, 8-15 line items per order, extended metadata (30-50 entries), and comprehensive notes/tags
+
+### Compression Settings
+
+For performance testing scenarios where storage size should match logical size, the tool automatically disables compression:
+
+1. **Network Compression**: Disabled by appending `compressors=disabled` to the MongoDB connection string
+2. **Storage Compression**: Disabled by creating collections with WiredTiger `block_compressor=none` setting
+
+These settings ensure that:
+- Logical data size matches storage size (important for volume snapshotting and initial sync performance testing)
+- No compression overhead during data generation
+- Accurate representation of actual storage requirements
+
+**Note**: If the collection already exists, the tool will attempt to create it with these settings. If creation fails (e.g., due to permissions or existing collection), the tool will use the existing collection as-is.
 
 
 ## Performance Benchmarking
