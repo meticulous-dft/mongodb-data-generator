@@ -128,27 +128,28 @@ Example output:
 
 ### YCSB-Style Logging
 
-The tool generates YCSB (Yahoo! Cloud Serving Benchmark) style logs to a file (default: `ycsb.log`). The log includes:
+The tool generates YCSB (Yahoo! Cloud Serving Benchmark) style logs to a file (default: `ycsb.log`). Statistics are logged every 10 seconds during execution, showing cumulative metrics from the start. The log includes:
 
 - Overall runtime and throughput
 - Operation counts (INSERT operations)
 - Latency statistics (average, min, max, 95th percentile, 99th percentile)
 - Success and error counts
 
-Example log output:
+Example log output (logged every 10 seconds):
 ```
-[OVERALL], RunTime(ms), 1800000
+=== Stats at 2024-01-15T10:30:00Z (elapsed: 30s) ===
+[OVERALL], RunTime(ms), 30000
 [OVERALL], Throughput(ops/sec), 12500.50
-[INSERT], Operations, 22500900
+[INSERT], Operations, 375015
 [INSERT], AverageLatency(us), 125.50
 [INSERT], MinLatency(us), 45
 [INSERT], MaxLatency(us), 2500
 [INSERT], 95thPercentileLatency(us), 350
 [INSERT], 99thPercentileLatency(us), 850
-[INSERT], Return=OK, Count, 22500900
+[INSERT], Return=OK, Count, 375015
 ```
 
-The log file is written continuously during execution and finalized on completion or shutdown.
+The log file is written periodically (every 10 seconds) and finalized with a summary on completion or shutdown.
 
 ## Development
 

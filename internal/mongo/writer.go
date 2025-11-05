@@ -263,11 +263,7 @@ func (w *Writer) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	
-	// Write final stats to YCSB logger if available
-	if w.ycsbLogger != nil {
-		w.ycsbLogger.WriteStats()
-	}
-	
+	// Final stats will be written when the logger is closed
 	return w.client.Disconnect(ctx)
 }
 

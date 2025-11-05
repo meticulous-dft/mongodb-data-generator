@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -16,6 +17,7 @@ type YCSBLogger struct {
 	startTime   time.Time
 	errorCount  int64
 	successCount int64
+	lastLogTime time.Time
 }
 
 // Operation represents a single operation with timing
@@ -33,9 +35,10 @@ func NewYCSBLogger(filePath string) (*YCSBLogger, error) {
 	}
 
 	logger := &YCSBLogger{
-		file:      file,
-		startTime: time.Now(),
-		operations: make([]Operation, 0, 100000), // Pre-allocate for performance
+		file:        file,
+		startTime:   time.Now(),
+		lastLogTime: time.Now(),
+		operations:  make([]Operation, 0, 100000), // Pre-allocate for performance
 	}
 
 	// Write header
@@ -71,6 +74,21 @@ func (l *YCSBLogger) RecordOperation(opType string, latency time.Duration, succe
 	}
 }
 
+// StartPeriodicLogging starts a goroutine that logs statistics every 10 seconds
+func (l *YCSBLogger) StartPeriodicLogging(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			l.WriteStats()
+		}
+	}
+}
+
 // WriteStats writes YCSB-style statistics to the log file
 func (l *YCSBLogger) WriteStats() error {
 	l.mu.Lock()
@@ -84,6 +102,11 @@ func (l *YCSBLogger) WriteStats() error {
 	if totalOps == 0 {
 		return nil
 	}
+
+	// Write timestamp for this log entry
+	l.file.WriteString(fmt.Sprintf("\n=== Stats at %s (elapsed: %s) ===\n", 
+		time.Now().Format(time.RFC3339),
+		elapsed.Round(time.Second)))
 
 	// Write overall stats
 	l.file.WriteString(fmt.Sprintf("[OVERALL], RunTime(ms), %d\n", elapsedMs))
@@ -103,6 +126,7 @@ func (l *YCSBLogger) WriteStats() error {
 	}
 
 	// Flush to ensure all data is written
+	l.lastLogTime = time.Now()
 	return l.file.Sync()
 }
 
@@ -166,7 +190,9 @@ func (l *YCSBLogger) writeOperationStats(opType string, ops []Operation) {
 
 // Close closes the log file
 func (l *YCSBLogger) Close() error {
+	// Write final stats
 	l.WriteStats()
+	l.file.WriteString("\n=== Final Statistics ===\n")
 	return l.file.Close()
 }
 
