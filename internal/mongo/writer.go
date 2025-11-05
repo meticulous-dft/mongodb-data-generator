@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minghe/data-generator/internal/logger"
 	"github.com/minghe/data-generator/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -26,6 +27,7 @@ type Writer struct {
 	docsWritten    int64
 	mu             sync.RWMutex
 	startTime      time.Time
+	ycsbLogger     *logger.YCSBLogger
 }
 
 // Config holds writer configuration
@@ -36,6 +38,7 @@ type Config struct {
 	BatchSize        int
 	WriterCount      int
 	TargetBytes      int64
+	YCSBLogger       *logger.YCSBLogger
 }
 
 // NewWriter creates a new MongoDB writer
@@ -88,6 +91,7 @@ func NewWriter(config Config) (*Writer, error) {
 		writerCount: config.WriterCount,
 		targetBytes: config.TargetBytes,
 		startTime:   time.Now(),
+		ycsbLogger: config.YCSBLogger,
 	}, nil
 }
 
@@ -185,16 +189,35 @@ func (w *Writer) flushBatch(ctx context.Context, batch []interface{}) error {
 	
 	// Use InsertMany for better performance
 	opts := options.InsertMany().SetOrdered(false) // Unordered for better performance
+	
+	// Record operation start time for YCSB logging
+	startTime := time.Now()
 	_, err := w.collection.InsertMany(ctx, batch, opts)
+	latency := time.Since(startTime)
+	
+	success := err == nil
 	if err != nil {
 		// Log error but continue - some documents might have succeeded
 		// In production, you might want more sophisticated error handling
-		return fmt.Errorf("failed to insert batch: %w", err)
+	}
+	
+	// Record operation in YCSB logger if available
+	if w.ycsbLogger != nil {
+		// Record each document in the batch as a separate operation
+		// Use average latency per document for more accurate metrics
+		avgLatencyPerDoc := latency / time.Duration(len(batch))
+		for i := 0; i < len(batch); i++ {
+			w.ycsbLogger.RecordOperation("INSERT", avgLatencyPerDoc, success)
+		}
 	}
 	
 	// Update statistics
 	atomic.AddInt64(&w.bytesWritten, totalBytes)
 	atomic.AddInt64(&w.docsWritten, int64(len(batch)))
+	
+	if err != nil {
+		return fmt.Errorf("failed to insert batch: %w", err)
+	}
 	
 	return nil
 }
@@ -239,6 +262,12 @@ type Stats struct {
 func (w *Writer) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	
+	// Write final stats to YCSB logger if available
+	if w.ycsbLogger != nil {
+		w.ycsbLogger.WriteStats()
+	}
+	
 	return w.client.Disconnect(ctx)
 }
 

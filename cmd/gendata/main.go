@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/minghe/data-generator/internal/generator"
+	"github.com/minghe/data-generator/internal/logger"
 	"github.com/minghe/data-generator/internal/model"
 	"github.com/minghe/data-generator/internal/mongo"
 )
@@ -29,6 +30,7 @@ func main() {
 		writers          = flag.Int("writers", 0, "Number of MongoDB writer workers (0 = auto)")
 		batchSize        = flag.Int("batch-size", 0, "Batch size for MongoDB writes (0 = auto)")
 		verbose          = flag.Bool("verbose", false, "Verbose logging")
+		logFile          = flag.String("log-file", "ycsb.log", "YCSB-style log file path")
 	)
 	
 	flag.Parse()
@@ -69,6 +71,17 @@ func main() {
 		log.Printf("Workers: %d, Writers: %d, Batch size: %d", *workers, *writers, *batchSize)
 	}
 	
+	// Initialize YCSB logger
+	ycsbLogger, err := logger.NewYCSBLogger(*logFile)
+	if err != nil {
+		log.Fatalf("Failed to create YCSB logger: %v", err)
+	}
+	defer ycsbLogger.Close()
+	
+	if *verbose {
+		log.Printf("YCSB logging to: %s", *logFile)
+	}
+	
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -98,6 +111,7 @@ func main() {
 		BatchSize:        *batchSize,
 		WriterCount:      *writers,
 		TargetBytes:      targetBytes,
+		YCSBLogger:       ycsbLogger,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create MongoDB writer: %v", err)

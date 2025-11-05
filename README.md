@@ -1,10 +1,9 @@
 # MongoDB Data Generator
 
-A high-performance Go tool for generating large volumes of realistic test data to MongoDB Atlas clusters. Designed to test MongoDB load, volume snapshotting, and initial sync performance.
+A Go tool for generating large volumes of realistic test data to MongoDB Atlas clusters.
 
 ## Features
 
-- **High Throughput**: Optimized for generating 1 TB of data in less than 30 minutes
 - **Flexible Document Sizes**: Support for 2KB, 4KB, 8KB, 16KB, 32KB, and 64KB documents
 - **Intelligent Sizing**: Automatically selects optimal document size based on target data volume
 - **Realistic Data**: Uses Faker library to generate meaningful customer/order documents with nested structures
@@ -22,7 +21,7 @@ A high-performance Go tool for generating large volumes of realistic test data t
 **Important**: Never commit MongoDB connection strings with credentials to version control. Use environment variables instead:
 
 ```bash
-export MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/"
+export MONGODB_URI=
 ```
 
 ## Installation
@@ -38,14 +37,6 @@ chmod +x gendata
 
 # For Linux ARM64
 curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-linux-arm64
-chmod +x gendata
-
-# For macOS x86_64
-curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-darwin-amd64
-chmod +x gendata
-
-# For macOS ARM64 (Apple Silicon)
-curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/releases/latest/download/gendata-darwin-arm64
 chmod +x gendata
 ```
 
@@ -73,13 +64,6 @@ go build -o bin/gendata ./cmd/gendata
   --size 1TB
 ```
 
-Or with an explicit connection string:
-```bash
-./bin/gendata \
-  --connection "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/" \
-  --size 1TB
-```
-
 ### Advanced Options
 
 ```bash
@@ -92,6 +76,7 @@ Or with an explicit connection string:
   --workers 20 \
   --writers 10 \
   --batch-size 2000 \
+  --log-file ycsb.log \
   --verbose
 ```
 
@@ -106,10 +91,9 @@ Or with an explicit connection string:
 - `--writers`: Number of MongoDB writer workers (default: `CPU count`)
 - `--batch-size`: Batch size for MongoDB writes (default: `2000`)
 - `--verbose`: Enable verbose logging
+- `--log-file`: Path to YCSB-style log file (default: `ycsb.log`)
 
 ### Performance Tuning
-
-For optimal performance targeting 1 TB in 30 minutes (550+ MB/s):
 
 1. **Use larger documents**: 8KB-64KB documents provide better throughput
 2. **Increase workers**: Scale with available CPU cores
@@ -117,18 +101,6 @@ For optimal performance targeting 1 TB in 30 minutes (550+ MB/s):
 4. **Larger batch sizes**: Reduces network round-trips (2000-5000 recommended)
 5. **Regional proximity**: Run from a VM in the same region as your Atlas cluster
 6. **Network**: Ensure sufficient network bandwidth
-
-### Recommended Settings for 1 TB in 30 Minutes
-
-```bash
-./bin/gendata \
-  --connection "$MONGODB_URI" \
-  --size 1TB \
-  --doc-size 16KB \
-  --workers 16 \
-  --writers 8 \
-  --batch-size 3000
-```
 
 ### Document Structure
 
@@ -140,16 +112,6 @@ Generated documents follow a customer/order schema with:
 - Metadata, notes, and tags
 - Padding to reach exact target document size
 
-## MongoDB Atlas Readiness Checklist
-
-Before running large data generation:
-
-- [ ] Network peering configured (if using private network)
-- [ ] IP whitelist includes client VM IP
-- [ ] Sufficient cluster resources (CPU, memory, IOPS)
-- [ ] Write concern configured appropriately (W:1 for maximum throughput)
-- [ ] No indexes on collection (for initial load, add indexes after)
-- [ ] Consider sharding for very large datasets (32TB+)
 
 ## Performance Benchmarking
 
@@ -164,28 +126,29 @@ Example output:
 [Gen: 125000 docs, 1950.45 MB/s] [Write: 125000 docs, 1950.45 MB/s] [Total: 2.05 GB]
 ```
 
-## Troubleshooting
+### YCSB-Style Logging
 
-### Slow Performance
+The tool generates YCSB (Yahoo! Cloud Serving Benchmark) style logs to a file (default: `ycsb.log`). The log includes:
 
-- Check network latency to MongoDB Atlas
-- Verify you're in the same region as the cluster
-- Increase batch size and worker counts
-- Use larger document sizes
-- Check MongoDB Atlas cluster metrics for bottlenecks
+- Overall runtime and throughput
+- Operation counts (INSERT operations)
+- Latency statistics (average, min, max, 95th percentile, 99th percentile)
+- Success and error counts
 
-### Connection Errors
+Example log output:
+```
+[OVERALL], RunTime(ms), 1800000
+[OVERALL], Throughput(ops/sec), 12500.50
+[INSERT], Operations, 22500900
+[INSERT], AverageLatency(us), 125.50
+[INSERT], MinLatency(us), 45
+[INSERT], MaxLatency(us), 2500
+[INSERT], 95thPercentileLatency(us), 350
+[INSERT], 99thPercentileLatency(us), 850
+[INSERT], Return=OK, Count, 22500900
+```
 
-- Verify connection string format
-- Check IP whitelist settings
-- Ensure network connectivity
-- Verify authentication credentials
-
-### Memory Usage
-
-- Reduce batch size if experiencing memory pressure
-- Reduce number of workers
-- Monitor system resources during generation
+The log file is written continuously during execution and finalized on completion or shutdown.
 
 ## Development
 
@@ -207,12 +170,3 @@ make test
 make vet
 make lint  # Requires golangci-lint
 ```
-
-## License
-
-[Add your license here]
-
-## Contributing
-
-[Add contribution guidelines here]
-
