@@ -23,40 +23,40 @@ const (
 
 // CustomerDocument represents a customer with nested orders and details
 type CustomerDocument struct {
-	ID           primitive.ObjectID `bson:"_id"`
-	CustomerID   string             `bson:"customer_id"`
-	Email        string             `bson:"email"`
-	FirstName    string             `bson:"first_name"`
-	LastName     string             `bson:"last_name"`
-	Phone        string             `bson:"phone"`
-	DateOfBirth  time.Time          `bson:"date_of_birth"`
-	CreatedAt    time.Time          `bson:"created_at"`
-	UpdatedAt    time.Time          `bson:"updated_at"`
-	
-	Addresses    []Address          `bson:"addresses"`
-	PaymentMethods []PaymentMethod  `bson:"payment_methods"`
-	Orders       []Order            `bson:"orders"`
-	
+	ID          primitive.ObjectID `bson:"_id"`
+	CustomerID  string             `bson:"customer_id"`
+	Email       string             `bson:"email"`
+	FirstName   string             `bson:"first_name"`
+	LastName    string             `bson:"last_name"`
+	Phone       string             `bson:"phone"`
+	DateOfBirth time.Time          `bson:"date_of_birth"`
+	CreatedAt   time.Time          `bson:"created_at"`
+	UpdatedAt   time.Time          `bson:"updated_at"`
+
+	Addresses      []Address       `bson:"addresses"`
+	PaymentMethods []PaymentMethod `bson:"payment_methods"`
+	Orders         []Order         `bson:"orders"`
+
 	// Metadata and padding fields
-	Metadata     map[string]interface{} `bson:"metadata"`
-	Notes        []string               `bson:"notes"`
-	Tags         []string               `bson:"tags"`
-	
+	Metadata map[string]interface{} `bson:"metadata"`
+	Notes    []string               `bson:"notes"`
+	Tags     []string               `bson:"tags"`
+
 	// Padding field to control document size
-	Padding      string                 `bson:"padding"`
+	Padding string `bson:"padding"`
 }
 
 // Address represents a customer address
 type Address struct {
-	ID          primitive.ObjectID `bson:"_id"`
-	Type        string             `bson:"type"` // home, work, shipping
-	Street      string             `bson:"street"`
-	City        string             `bson:"city"`
-	State       string             `bson:"state"`
-	ZipCode     string             `bson:"zip_code"`
-	Country     string             `bson:"country"`
-	IsDefault   bool               `bson:"is_default"`
-	CreatedAt   time.Time          `bson:"created_at"`
+	ID        primitive.ObjectID `bson:"_id"`
+	Type      string             `bson:"type"` // home, work, shipping
+	Street    string             `bson:"street"`
+	City      string             `bson:"city"`
+	State     string             `bson:"state"`
+	ZipCode   string             `bson:"zip_code"`
+	Country   string             `bson:"country"`
+	IsDefault bool               `bson:"is_default"`
+	CreatedAt time.Time          `bson:"created_at"`
 }
 
 // PaymentMethod represents a payment method
@@ -73,26 +73,26 @@ type PaymentMethod struct {
 
 // Order represents an order with line items
 type Order struct {
-	ID          primitive.ObjectID `bson:"_id"`
-	OrderNumber string             `bson:"order_number"`
-	Status      string             `bson:"status"` // pending, processing, shipped, delivered, cancelled
-	TotalAmount float64            `bson:"total_amount"`
-	Currency    string             `bson:"currency"`
-	OrderDate   time.Time          `bson:"order_date"`
-	ShippedDate *time.Time         `bson:"shipped_date,omitempty"`
-	DeliveredDate *time.Time       `bson:"delivered_date,omitempty"`
-	
-	ShippingAddress Address         `bson:"shipping_address"`
-	BillingAddress  Address         `bson:"billing_address"`
-	
-	LineItems   []LineItem         `bson:"line_items"`
-	
-	Discounts   []Discount         `bson:"discounts"`
-	Taxes       []Tax              `bson:"taxes"`
-	
-	Notes       string             `bson:"notes"`
-	CreatedAt   time.Time          `bson:"created_at"`
-	UpdatedAt   time.Time          `bson:"updated_at"`
+	ID            primitive.ObjectID `bson:"_id"`
+	OrderNumber   string             `bson:"order_number"`
+	Status        string             `bson:"status"` // pending, processing, shipped, delivered, cancelled
+	TotalAmount   float64            `bson:"total_amount"`
+	Currency      string             `bson:"currency"`
+	OrderDate     time.Time          `bson:"order_date"`
+	ShippedDate   *time.Time         `bson:"shipped_date,omitempty"`
+	DeliveredDate *time.Time         `bson:"delivered_date,omitempty"`
+
+	ShippingAddress Address `bson:"shipping_address"`
+	BillingAddress  Address `bson:"billing_address"`
+
+	LineItems []LineItem `bson:"line_items"`
+
+	Discounts []Discount `bson:"discounts"`
+	Taxes     []Tax      `bson:"taxes"`
+
+	Notes     string    `bson:"notes"`
+	CreatedAt time.Time `bson:"created_at"`
+	UpdatedAt time.Time `bson:"updated_at"`
 }
 
 // LineItem represents an order line item
@@ -129,28 +129,28 @@ type Tax struct {
 
 // Generator generates customer documents with faker
 type Generator struct {
-	faker *gofakeit.Faker
-	targetSize DocumentSize
+	faker            *gofakeit.Faker
+	targetSize       DocumentSize
 	paddingTemplates map[DocumentSize]string
 }
 
 // NewGenerator creates a new document generator
 func NewGenerator(targetSize DocumentSize) *Generator {
 	faker := gofakeit.New(uint64(time.Now().UnixNano()))
-	
+
 	// Precompute padding templates for each size to avoid recomputation
 	paddingTemplates := make(map[DocumentSize]string)
 	sizes := []DocumentSize{Size2KB, Size4KB, Size8KB, Size16KB, Size32KB, Size64KB}
-	
+
 	for _, size := range sizes {
 		// Generate a base document to measure, then calculate padding needed
 		// We'll fine-tune this in the Generate method
 		paddingTemplates[size] = ""
 	}
-	
+
 	return &Generator{
-		faker: faker,
-		targetSize: targetSize,
+		faker:            faker,
+		targetSize:       targetSize,
 		paddingTemplates: paddingTemplates,
 	}
 }
@@ -163,7 +163,7 @@ func (g *Generator) TargetSize() DocumentSize {
 // Generate creates a new customer document with the target size
 func (g *Generator) Generate() (*CustomerDocument, error) {
 	now := time.Now()
-	
+
 	// Generate base customer data
 	doc := &CustomerDocument{
 		ID:          primitive.NewObjectID(),
@@ -176,40 +176,64 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 		CreatedAt:   g.faker.DateRange(now.AddDate(-5, 0, 0), now),
 		UpdatedAt:   now,
 	}
-	
+
 	// Adjust document structure based on target size
-	// For smaller targets (2KB-4KB), use minimal structure
-	// For larger targets, use more nested data
+	// Goal: Ensure meaningful data is majority (>80%), padding is minority (<20%)
+	// For 64KB: ~50KB+ meaningful data, ~14KB padding
 	targetKB := int(g.targetSize) / 1024
 	
-	// Addresses: fewer for small documents
-	if targetKB <= 4 {
+	// Addresses: scale with target size
+	if targetKB <= 2 {
 		numAddresses := 1
 		doc.Addresses = make([]Address, numAddresses)
 		doc.Addresses[0] = g.generateAddress(true)
+	} else if targetKB <= 4 {
+		numAddresses := g.faker.IntRange(1, 2)
+		doc.Addresses = make([]Address, numAddresses)
+		for i := 0; i < numAddresses; i++ {
+			doc.Addresses[i] = g.generateAddress(i == 0)
+		}
+	} else if targetKB <= 16 {
+		numAddresses := g.faker.IntRange(2, 5)
+		doc.Addresses = make([]Address, numAddresses)
+		for i := 0; i < numAddresses; i++ {
+			doc.Addresses[i] = g.generateAddress(i == 0)
+		}
 	} else {
-		numAddresses := g.faker.IntRange(2, 6)
+		// For larger documents (32KB+), use more addresses
+		numAddresses := g.faker.IntRange(5, 10)
 		doc.Addresses = make([]Address, numAddresses)
 		for i := 0; i < numAddresses; i++ {
 			doc.Addresses[i] = g.generateAddress(i == 0)
 		}
 	}
 	
-	// Payment methods: fewer for small documents
-	if targetKB <= 4 {
+	// Payment methods: scale with target size
+	if targetKB <= 2 {
 		doc.PaymentMethods = make([]PaymentMethod, 1)
 		doc.PaymentMethods[0] = g.generatePaymentMethod(true)
+	} else if targetKB <= 4 {
+		doc.PaymentMethods = make([]PaymentMethod, g.faker.IntRange(1, 2))
+		for i := 0; i < len(doc.PaymentMethods); i++ {
+			doc.PaymentMethods[i] = g.generatePaymentMethod(i == 0)
+		}
+	} else if targetKB <= 16 {
+		numPayments := g.faker.IntRange(2, 5)
+		doc.PaymentMethods = make([]PaymentMethod, numPayments)
+		for i := 0; i < numPayments; i++ {
+			doc.PaymentMethods[i] = g.generatePaymentMethod(i == 0)
+		}
 	} else {
-		numPayments := g.faker.IntRange(1, 5)
+		// For larger documents, use more payment methods
+		numPayments := g.faker.IntRange(5, 10)
 		doc.PaymentMethods = make([]PaymentMethod, numPayments)
 		for i := 0; i < numPayments; i++ {
 			doc.PaymentMethods[i] = g.generatePaymentMethod(i == 0)
 		}
 	}
 	
-	// Orders: scale based on target size
-	// For 2KB, use no orders to keep base document small
-	// For 4KB+, generate orders
+	// Orders: scale aggressively with target size to fill most of the document
+	// For 64KB, we want ~50KB+ of meaningful data, so need many orders
 	if targetKB <= 2 {
 		doc.Orders = []Order{} // No orders for 2KB
 	} else {
@@ -220,48 +244,63 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 		}
 	}
 	
-	// Metadata: minimal for small documents
+	// Metadata: scale with target size
 	if targetKB <= 2 {
-		doc.Metadata = nil // No metadata for 2KB
+		doc.Metadata = nil
 	} else if targetKB <= 4 {
 		doc.Metadata = make(map[string]interface{})
 		doc.Metadata["created_by"] = "system"
+	} else if targetKB <= 16 {
+		doc.Metadata = g.generateMetadata() // 5-15 entries
 	} else {
-		doc.Metadata = g.generateMetadata()
+		// For larger documents, generate more metadata
+		doc.Metadata = g.generateExtendedMetadata(targetKB)
 	}
 	
-	// Notes and tags: minimal for 2KB documents
+	// Notes and tags: scale with target size
 	if targetKB <= 2 {
-		doc.Notes = nil // No notes for 2KB
-		doc.Tags = nil  // No tags for 2KB
+		doc.Notes = nil
+		doc.Tags = nil
 	} else if targetKB <= 4 {
 		doc.Notes = []string{g.faker.Sentence(10)}
 		doc.Tags = []string{g.faker.Word(), g.faker.Word()}
-	} else {
+	} else if targetKB <= 16 {
 		numNotes := g.faker.IntRange(3, 8)
 		doc.Notes = make([]string, numNotes)
 		for i := 0; i < numNotes; i++ {
 			doc.Notes[i] = g.faker.Paragraph(3, 5, 10, " ")
 		}
-		
 		numTags := g.faker.IntRange(5, 15)
 		doc.Tags = make([]string, numTags)
 		for i := 0; i < numTags; i++ {
 			doc.Tags[i] = g.faker.Word()
 		}
+	} else {
+		// For larger documents, generate more notes and tags
+		numNotes := g.faker.IntRange(10, 20)
+		doc.Notes = make([]string, numNotes)
+		for i := 0; i < numNotes; i++ {
+			doc.Notes[i] = g.faker.Paragraph(5, 10, 15, " ")
+		}
+		numTags := g.faker.IntRange(15, 30)
+		doc.Tags = make([]string, numTags)
+		for i := 0; i < numTags; i++ {
+			doc.Tags[i] = g.faker.Word()
+		}
 	}
-	
+
 	// Calculate and add padding to reach target size
 	padding, err := g.calculatePadding(doc)
 	if err != nil {
 		return nil, err
 	}
 	doc.Padding = padding
-	
+
 	return doc, nil
 }
 
 // calculateOrderCount determines how many orders to generate based on target size
+// Goal: Fill 80%+ of document with meaningful data (orders are the main content)
 func (g *Generator) calculateOrderCount() int {
 	targetKB := int(g.targetSize) / 1024
 	
@@ -270,17 +309,20 @@ func (g *Generator) calculateOrderCount() int {
 		return g.faker.IntRange(1, 2)
 	}
 	
-	// For larger documents, scale up
-	baseCount := targetKB / 8
+	// Scale orders to fill majority of document
+	// Each order with full structure is roughly 3-5KB
+	// For 64KB target: want ~50KB+ meaningful data = ~10-15 orders
+	// Formula: targetKB * 0.8 / 4 (assuming ~4KB per order) = targetKB * 0.2
+	baseCount := int(float64(targetKB) * 0.2) // ~20% of target in KB = number of orders
 	if baseCount < 1 {
 		baseCount = 1
 	}
-	if baseCount > 20 {
-		baseCount = 20
+	if baseCount > 30 {
+		baseCount = 30 // Cap at 30 orders for very large documents
 	}
 	
-	// Add some variation
-	return g.faker.IntRange(baseCount, baseCount+3)
+	// Add some variation (±1 order)
+	return g.faker.IntRange(baseCount-1, baseCount+1)
 }
 
 // generateAddress creates a fake address
@@ -315,30 +357,39 @@ func (g *Generator) generatePaymentMethod(isDefault bool) PaymentMethod {
 // generateOrder creates a fake order with line items
 func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 	orderDate := g.faker.DateRange(baseTime.AddDate(-2, 0, 0), baseTime)
-	
+
 	// Adjust line items based on target size
-	// For smaller documents (4KB), use fewer line items with shorter descriptions
+	// Scale up line items for larger documents to fill more space with meaningful data
 	var numLineItems int
 	if targetKB <= 4 {
 		numLineItems = g.faker.IntRange(1, 3) // Fewer items for small docs
+	} else if targetKB <= 16 {
+		numLineItems = g.faker.IntRange(3, 8)
+	} else if targetKB <= 32 {
+		numLineItems = g.faker.IntRange(5, 12)
 	} else {
-		numLineItems = g.faker.IntRange(1, 10)
+		// For 64KB documents, use more line items per order
+		numLineItems = g.faker.IntRange(8, 15)
 	}
 	lineItems := make([]LineItem, numLineItems)
-	
+
 	var totalAmount float64
 	for i := 0; i < numLineItems; i++ {
 		quantity := g.faker.IntRange(1, 5)
 		unitPrice := g.faker.Price(10, 1000)
-		
-		// Shorter descriptions for smaller documents
+
+		// Scale description length with document size
 		var description string
 		if targetKB <= 4 {
-			description = g.faker.Sentence(5) // Short sentence instead of paragraph
+			description = g.faker.Sentence(5) // Short sentence
+		} else if targetKB <= 16 {
+			description = g.faker.Paragraph(2, 3, 5, " ") // Medium paragraph
+		} else if targetKB <= 32 {
+			description = g.faker.Paragraph(3, 5, 8, " ") // Longer paragraph
 		} else {
-			description = g.faker.Paragraph(2, 3, 5, " ")
+			description = g.faker.Paragraph(5, 8, 12, " ") // Very long paragraph for 64KB
 		}
-		
+
 		lineItems[i] = LineItem{
 			ID:          primitive.NewObjectID(),
 			ProductID:   g.faker.UUID(),
@@ -353,7 +404,7 @@ func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 		}
 		totalAmount += lineItems[i].TotalPrice
 	}
-	
+
 	// Add discounts - fewer for smaller documents
 	var numDiscounts int
 	if targetKB <= 4 {
@@ -371,7 +422,7 @@ func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 			Description: g.faker.Sentence(5),
 		}
 	}
-	
+
 	// Add taxes - fewer for smaller documents
 	var numTaxes int
 	if targetKB <= 4 {
@@ -390,7 +441,7 @@ func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 			Description: g.faker.Sentence(5),
 		}
 	}
-	
+
 	status := g.faker.RandomString([]string{"pending", "processing", "shipped", "delivered", "cancelled"})
 	var shippedDate, deliveredDate *time.Time
 	if status == "shipped" || status == "delivered" {
@@ -401,24 +452,24 @@ func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 		dd := g.faker.DateRange(orderDate, baseTime)
 		deliveredDate = &dd
 	}
-	
+
 	return Order{
-		ID:            primitive.NewObjectID(),
-		OrderNumber:   g.faker.UUID(),
-		Status:        status,
-		TotalAmount:   totalAmount,
-		Currency:      g.faker.Currency().Short,
-		OrderDate:     orderDate,
-		ShippedDate:   shippedDate,
-		DeliveredDate: deliveredDate,
+		ID:              primitive.NewObjectID(),
+		OrderNumber:     g.faker.UUID(),
+		Status:          status,
+		TotalAmount:     totalAmount,
+		Currency:        g.faker.Currency().Short,
+		OrderDate:       orderDate,
+		ShippedDate:     shippedDate,
+		DeliveredDate:   deliveredDate,
 		ShippingAddress: g.generateAddress(false),
 		BillingAddress:  g.generateAddress(false),
-		LineItems:     lineItems,
-		Discounts:     discounts,
-		Taxes:         taxes,
-		Notes:         g.faker.Paragraph(1, 2, 5, " "),
-		CreatedAt:     orderDate,
-		UpdatedAt:     g.faker.DateRange(orderDate, baseTime),
+		LineItems:       lineItems,
+		Discounts:       discounts,
+		Taxes:           taxes,
+		Notes:           g.faker.Paragraph(1, 2, 5, " "),
+		CreatedAt:       orderDate,
+		UpdatedAt:       g.faker.DateRange(orderDate, baseTime),
 	}
 }
 
@@ -445,6 +496,31 @@ func (g *Generator) generateMetadata() map[string]interface{} {
 	return metadata
 }
 
+// generateExtendedMetadata creates extended metadata for larger documents
+func (g *Generator) generateExtendedMetadata(targetKB int) map[string]interface{} {
+	metadata := make(map[string]interface{})
+	// Scale metadata entries with document size
+	// For 64KB: ~30-50 entries
+	numEntries := g.faker.IntRange(20, int(float64(targetKB)*0.8))
+	
+	for i := 0; i < numEntries; i++ {
+		key := g.faker.Word() + "_" + g.faker.Word() // Longer keys for larger docs
+		// Mix of different value types, with longer strings for larger docs
+		switch g.faker.IntRange(0, 3) {
+		case 0:
+			metadata[key] = g.faker.LetterN(uint(g.faker.IntRange(50, 200))) // Longer strings
+		case 1:
+			metadata[key] = g.faker.IntRange(1, 10000)
+		case 2:
+			metadata[key] = g.faker.Bool()
+		case 3:
+			metadata[key] = g.faker.Float64Range(0, 1000)
+		}
+	}
+	
+	return metadata
+}
+
 // calculatePadding calculates the padding needed to reach target size
 func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 	// Serialize the document with empty padding to account for field metadata
@@ -453,25 +529,33 @@ func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	currentSize := len(bsonData)
 	targetSize := int(g.targetSize)
-	
+
 	// If already at or above target, no padding needed
 	if currentSize >= targetSize {
 		return "", nil
 	}
-	
+
 	// Calculate padding needed, accounting for BSON field overhead (~12 bytes)
 	paddingNeeded := targetSize - currentSize - 12
-	
+
+	// Enforce that padding should not exceed 20% of target size
+	// This ensures meaningful data is at least 80% of the document
+	maxPadding := int(float64(targetSize) * 0.2)
+	if paddingNeeded > maxPadding {
+		// If base document is too small, cap padding at 20% of target
+		paddingNeeded = maxPadding
+	}
+
 	if paddingNeeded <= 0 {
 		return "", nil
 	}
-	
+
 	// Generate high-entropy compression-resistant padding (fast)
 	padding := g.generateCompressionResistantPadding(paddingNeeded)
-	
+
 	return padding, nil
 }
 
@@ -479,7 +563,7 @@ func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 // This creates truly random data that resists compression algorithms
 func (g *Generator) generateCompressionResistantPadding(size int) string {
 	padding := make([]byte, size)
-	
+
 	// Use crypto/rand for true randomness - this is the best compression resistance
 	// While it's slightly slower than LFSR, it's still fast enough and provides
 	// maximum entropy that compression algorithms cannot compress
@@ -492,7 +576,7 @@ func (g *Generator) generateCompressionResistantPadding(size int) string {
 			padding[i] = byte(seed ^ (seed >> 8) ^ (seed >> 16) ^ (seed >> 24))
 		}
 	}
-	
+
 	return string(padding)
 }
 
@@ -502,4 +586,3 @@ func EstimateSize(doc *CustomerDocument) int {
 	// This is used for quick checks
 	return len(doc.CustomerID) + len(doc.Email) + len(doc.FirstName) + len(doc.LastName) + 500
 }
-
