@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minghe/data-generator/internal/logger"
-	"github.com/minghe/data-generator/internal/model"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/logger"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

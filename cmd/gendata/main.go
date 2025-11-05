@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minghe/data-generator/internal/generator"
-	"github.com/minghe/data-generator/internal/logger"
-	"github.com/minghe/data-generator/internal/model"
-	"github.com/minghe/data-generator/internal/mongo"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/generator"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/logger"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/model"
+	"github.com/meticulous-dft/mongodb-data-generator/internal/mongo"
 )
 
 func main() {
