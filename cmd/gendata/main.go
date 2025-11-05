@@ -212,19 +212,19 @@ func determineDocumentSize(docSizeStr string, targetBytes int64) (model.Document
 	}
 
 	// Auto-select based on target size
-	// For very large targets, use larger documents for better throughput
-	if targetBytes >= 32*1024*1024*1024*1024 { // 32TB
+	// Scale document size down a notch: use smaller documents for better granularity
+	if targetBytes >= 8*1024*1024*1024*1024 { // >= 8TB
 		return model.Size64KB, nil
-	} else if targetBytes >= 16*1024*1024*1024*1024 { // 16TB
+	} else if targetBytes >= 4*1024*1024*1024*1024 { // >= 4TB
 		return model.Size32KB, nil
-	} else if targetBytes >= 8*1024*1024*1024*1024 { // 8TB
+	} else if targetBytes >= 2*1024*1024*1024*1024 { // >= 2TB
 		return model.Size16KB, nil
-	} else if targetBytes >= 4*1024*1024*1024*1024 { // 4TB
+	} else if targetBytes >= 1*1024*1024*1024*1024 { // >= 1TB
 		return model.Size8KB, nil
-	} else if targetBytes >= 2*1024*1024*1024*1024 { // 2TB
+	} else if targetBytes >= 100*1024*1024*1024 { // >= 100GB
 		return model.Size4KB, nil
 	} else {
-		return model.Size2KB, nil
+		return model.Size2KB, nil // < 100GB
 	}
 }
 
