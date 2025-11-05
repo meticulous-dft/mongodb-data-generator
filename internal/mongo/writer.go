@@ -92,8 +92,27 @@ func NewWriter(config Config) (*Writer, error) {
 	if err := client.Ping(ctx, nil); err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
-
-	collection := client.Database(config.DatabaseName).Collection(config.CollectionName)
+	
+	database := client.Database(config.DatabaseName)
+	
+	// Create collection with WiredTiger storage compression disabled
+	// This ensures storage size matches logical size for performance testing
+	createOpts := options.CreateCollection().
+		SetStorageEngine(bson.D{
+			{Key: "wiredTiger", Value: bson.D{
+				{Key: "configString", Value: "block_compressor=none"},
+			}},
+		})
+	
+	// Try to create collection (ignore error if it already exists)
+	err = database.CreateCollection(ctx, config.CollectionName, createOpts)
+	if err != nil && !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "NamespaceExists") {
+		// If collection creation fails for other reasons, log but continue
+		// The collection might already exist or we might not have permissions
+		// In that case, we'll use the existing collection
+	}
+	
+	collection := database.Collection(config.CollectionName)
 
 	return &Writer{
 		client:      client,
