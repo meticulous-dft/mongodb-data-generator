@@ -245,6 +245,11 @@ func (w *Writer) flushBatch(ctx context.Context, batch []interface{}) error {
 	atomic.AddInt64(&w.bytesWritten, totalBytes)
 	atomic.AddInt64(&w.docsWritten, int64(len(batch)))
 
+	// Update YCSB logger with bytes written
+	if w.ycsbLogger != nil {
+		w.ycsbLogger.UpdateBytesWritten(atomic.LoadInt64(&w.bytesWritten))
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to insert batch: %w", err)
 	}

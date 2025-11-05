@@ -78,6 +78,9 @@ func main() {
 	}
 	defer ycsbLogger.Close()
 
+	// Set target bytes for completion estimation
+	ycsbLogger.SetTargetBytes(targetBytes)
+
 	if *verbose {
 		log.Printf("YCSB logging to: %s", *logFile)
 	}
