@@ -11,13 +11,13 @@ import (
 
 // YCSBLogger implements YCSB-style logging
 type YCSBLogger struct {
-	file        *os.File
-	mu          sync.Mutex
-	operations  []Operation
-	startTime   time.Time
-	errorCount  int64
+	file         *os.File
+	mu           sync.Mutex
+	operations   []Operation
+	startTime    time.Time
+	errorCount   int64
 	successCount int64
-	lastLogTime time.Time
+	lastLogTime  time.Time
 }
 
 // Operation represents a single operation with timing
@@ -104,13 +104,13 @@ func (l *YCSBLogger) WriteStats() error {
 	}
 
 	// Write timestamp for this log entry
-	l.file.WriteString(fmt.Sprintf("\n=== Stats at %s (elapsed: %s) ===\n", 
+	l.file.WriteString(fmt.Sprintf("\n=== Stats at %s (elapsed: %s) ===\n",
 		time.Now().Format(time.RFC3339),
 		elapsed.Round(time.Second)))
 
 	// Write overall stats
 	l.file.WriteString(fmt.Sprintf("[OVERALL], RunTime(ms), %d\n", elapsedMs))
-	
+
 	throughput := float64(totalOps) / elapsed.Seconds()
 	l.file.WriteString(fmt.Sprintf("[OVERALL], Throughput(ops/sec), %.2f\n", throughput))
 
@@ -195,4 +195,3 @@ func (l *YCSBLogger) Close() error {
 	l.file.WriteString("\n=== Final Statistics ===\n")
 	return l.file.Close()
 }
-

@@ -176,42 +176,67 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 		UpdatedAt:   now,
 	}
 	
-	// Generate addresses (2-5 addresses)
-	numAddresses := g.faker.IntRange(2, 6)
-	doc.Addresses = make([]Address, numAddresses)
-	for i := 0; i < numAddresses; i++ {
-		doc.Addresses[i] = g.generateAddress(i == 0)
+	// Adjust document structure based on target size
+	// For smaller targets (2KB-4KB), use minimal structure
+	// For larger targets, use more nested data
+	targetKB := int(g.targetSize) / 1024
+	
+	// Addresses: fewer for small documents
+	if targetKB <= 4 {
+		numAddresses := 1
+		doc.Addresses = make([]Address, numAddresses)
+		doc.Addresses[0] = g.generateAddress(true)
+	} else {
+		numAddresses := g.faker.IntRange(2, 6)
+		doc.Addresses = make([]Address, numAddresses)
+		for i := 0; i < numAddresses; i++ {
+			doc.Addresses[i] = g.generateAddress(i == 0)
+		}
 	}
 	
-	// Generate payment methods (1-4 payment methods)
-	numPayments := g.faker.IntRange(1, 5)
-	doc.PaymentMethods = make([]PaymentMethod, numPayments)
-	for i := 0; i < numPayments; i++ {
-		doc.PaymentMethods[i] = g.generatePaymentMethod(i == 0)
+	// Payment methods: fewer for small documents
+	if targetKB <= 4 {
+		doc.PaymentMethods = make([]PaymentMethod, 1)
+		doc.PaymentMethods[0] = g.generatePaymentMethod(true)
+	} else {
+		numPayments := g.faker.IntRange(1, 5)
+		doc.PaymentMethods = make([]PaymentMethod, numPayments)
+		for i := 0; i < numPayments; i++ {
+			doc.PaymentMethods[i] = g.generatePaymentMethod(i == 0)
+		}
 	}
 	
-	// Generate orders (variable number based on target size)
-	// Larger documents need more orders to reach target size
+	// Orders: scale based on target size
 	numOrders := g.calculateOrderCount()
 	doc.Orders = make([]Order, numOrders)
 	for i := 0; i < numOrders; i++ {
 		doc.Orders[i] = g.generateOrder(now)
 	}
 	
-	// Generate metadata
-	doc.Metadata = g.generateMetadata()
-	
-	// Generate notes and tags
-	numNotes := g.faker.IntRange(3, 8)
-	doc.Notes = make([]string, numNotes)
-	for i := 0; i < numNotes; i++ {
-		doc.Notes[i] = g.faker.Paragraph(3, 5, 10, " ")
+	// Metadata: minimal for small documents
+	if targetKB <= 4 {
+		doc.Metadata = make(map[string]interface{})
+		doc.Metadata["created_by"] = "system"
+	} else {
+		doc.Metadata = g.generateMetadata()
 	}
 	
-	numTags := g.faker.IntRange(5, 15)
-	doc.Tags = make([]string, numTags)
-	for i := 0; i < numTags; i++ {
-		doc.Tags[i] = g.faker.Word()
+	// Notes and tags: fewer for small documents
+	if targetKB <= 4 {
+		doc.Notes = []string{g.faker.Sentence(10)}
+		doc.Tags = []string{g.faker.Word(), g.faker.Word()}
+	} else {
+		numNotes := g.faker.IntRange(3, 8)
+		doc.Notes = make([]string, numNotes)
+		for i := 0; i < numNotes; i++ {
+			doc.Notes[i] = g.faker.Paragraph(3, 5, 10, " ")
+		}
+		
+		numTags := g.faker.IntRange(5, 15)
+		doc.Tags = make([]string, numTags)
+		for i := 0; i < numTags; i++ {
+			doc.Tags[i] = g.faker.Word()
+		}
 	}
 	
 	// Calculate and add padding to reach target size
@@ -226,8 +251,20 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 
 // calculateOrderCount determines how many orders to generate based on target size
 func (g *Generator) calculateOrderCount() int {
-	// Base order count scales with document size
-	baseCount := int(g.targetSize) / (8 * 1024) // Rough estimate
+	targetKB := int(g.targetSize) / 1024
+	
+	// For very small documents (2KB), use minimal orders (0-1)
+	if targetKB <= 2 {
+		return g.faker.IntRange(0, 1)
+	}
+	
+	// For small documents (4KB), use 1-2 orders
+	if targetKB <= 4 {
+		return g.faker.IntRange(1, 2)
+	}
+	
+	// For larger documents, scale up
+	baseCount := targetKB / 8
 	if baseCount < 1 {
 		baseCount = 1
 	}
@@ -377,7 +414,7 @@ func (g *Generator) generateMetadata() map[string]interface{} {
 
 // calculatePadding calculates the padding needed to reach target size
 func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
-	// Serialize the document without padding to measure its size
+	// Serialize the document with empty padding to account for field metadata
 	doc.Padding = ""
 	bsonData, err := bson.Marshal(doc)
 	if err != nil {
@@ -387,29 +424,39 @@ func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 	currentSize := len(bsonData)
 	targetSize := int(g.targetSize)
 	
-	// If already at or above target, return minimal padding
+	// If already at or above target, no padding needed
 	if currentSize >= targetSize {
 		return "", nil
 	}
 	
-	// Calculate padding needed
-	paddingNeeded := targetSize - currentSize
+	// Calculate padding needed, accounting for BSON field overhead (~12 bytes)
+	paddingNeeded := targetSize - currentSize - 12
 	
-	// Use a compression-resistant pattern (random-looking but deterministic)
-	// This helps with volume snapshotting tests
-	paddingChar := "A"
-	if paddingNeeded > 100 {
-		// For larger padding, use a mix of characters to avoid compression
-		paddingChar = "X"
+	if paddingNeeded <= 0 {
+		return "", nil
 	}
 	
-	// Generate padding string
-	padding := make([]byte, paddingNeeded)
-	for i := range padding {
-		padding[i] = byte(paddingChar[0] + byte(i%26))
+	// Generate high-entropy compression-resistant padding (fast)
+	padding := g.generateCompressionResistantPadding(paddingNeeded)
+	
+	return padding, nil
+}
+
+// generateCompressionResistantPadding generates high-entropy padding quickly
+func (g *Generator) generateCompressionResistantPadding(size int) string {
+	padding := make([]byte, size)
+	
+	// Fast pseudo-random using linear feedback shift register (LFSR)
+	// This is fast and creates high-entropy data that resists compression
+	seed := uint32(uint64(time.Now().UnixNano()) ^ uint64(size))
+	
+	for i := 0; i < size; i++ {
+		// LFSR: fast, deterministic, high entropy
+		seed = (seed << 1) ^ ((seed >> 31) & 0xD0000001)
+		padding[i] = byte(seed ^ (seed >> 8) ^ (seed >> 16) ^ (seed >> 24))
 	}
 	
-	return string(padding), nil
+	return string(padding)
 }
 
 // EstimateSize estimates the BSON size of a document without serializing
