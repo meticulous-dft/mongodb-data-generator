@@ -208,22 +208,33 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 	}
 	
 	// Orders: scale based on target size
-	numOrders := g.calculateOrderCount()
-	doc.Orders = make([]Order, numOrders)
-	for i := 0; i < numOrders; i++ {
-		doc.Orders[i] = g.generateOrder(now)
+	// For 2KB, use no orders to keep base document small
+	// For 4KB+, generate orders
+	if targetKB <= 2 {
+		doc.Orders = []Order{} // No orders for 2KB
+	} else {
+		numOrders := g.calculateOrderCount()
+		doc.Orders = make([]Order, numOrders)
+		for i := 0; i < numOrders; i++ {
+			doc.Orders[i] = g.generateOrder(now, targetKB)
+		}
 	}
 	
 	// Metadata: minimal for small documents
-	if targetKB <= 4 {
+	if targetKB <= 2 {
+		doc.Metadata = nil // No metadata for 2KB
+	} else if targetKB <= 4 {
 		doc.Metadata = make(map[string]interface{})
 		doc.Metadata["created_by"] = "system"
 	} else {
 		doc.Metadata = g.generateMetadata()
 	}
 	
-	// Notes and tags: fewer for small documents
-	if targetKB <= 4 {
+	// Notes and tags: minimal for 2KB documents
+	if targetKB <= 2 {
+		doc.Notes = nil // No notes for 2KB
+		doc.Tags = nil  // No tags for 2KB
+	} else if targetKB <= 4 {
 		doc.Notes = []string{g.faker.Sentence(10)}
 		doc.Tags = []string{g.faker.Word(), g.faker.Word()}
 	} else {
@@ -253,11 +264,6 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 // calculateOrderCount determines how many orders to generate based on target size
 func (g *Generator) calculateOrderCount() int {
 	targetKB := int(g.targetSize) / 1024
-	
-	// For very small documents (2KB), use minimal orders (0-1)
-	if targetKB <= 2 {
-		return g.faker.IntRange(0, 1)
-	}
 	
 	// For small documents (4KB), use 1-2 orders
 	if targetKB <= 4 {
@@ -307,16 +313,32 @@ func (g *Generator) generatePaymentMethod(isDefault bool) PaymentMethod {
 }
 
 // generateOrder creates a fake order with line items
-func (g *Generator) generateOrder(baseTime time.Time) Order {
+func (g *Generator) generateOrder(baseTime time.Time, targetKB int) Order {
 	orderDate := g.faker.DateRange(baseTime.AddDate(-2, 0, 0), baseTime)
 	
-	numLineItems := g.faker.IntRange(1, 10)
+	// Adjust line items based on target size
+	// For smaller documents (4KB), use fewer line items with shorter descriptions
+	var numLineItems int
+	if targetKB <= 4 {
+		numLineItems = g.faker.IntRange(1, 3) // Fewer items for small docs
+	} else {
+		numLineItems = g.faker.IntRange(1, 10)
+	}
 	lineItems := make([]LineItem, numLineItems)
 	
 	var totalAmount float64
 	for i := 0; i < numLineItems; i++ {
 		quantity := g.faker.IntRange(1, 5)
 		unitPrice := g.faker.Price(10, 1000)
+		
+		// Shorter descriptions for smaller documents
+		var description string
+		if targetKB <= 4 {
+			description = g.faker.Sentence(5) // Short sentence instead of paragraph
+		} else {
+			description = g.faker.Paragraph(2, 3, 5, " ")
+		}
+		
 		lineItems[i] = LineItem{
 			ID:          primitive.NewObjectID(),
 			ProductID:   g.faker.UUID(),
@@ -327,13 +349,18 @@ func (g *Generator) generateOrder(baseTime time.Time) Order {
 			TotalPrice:  unitPrice * float64(quantity),
 			Category:    g.faker.Hobby(),
 			Brand:       g.faker.Company(),
-			Description: g.faker.Paragraph(2, 3, 5, " "),
+			Description: description,
 		}
 		totalAmount += lineItems[i].TotalPrice
 	}
 	
-	// Add discounts
-	numDiscounts := g.faker.IntRange(0, 2)
+	// Add discounts - fewer for smaller documents
+	var numDiscounts int
+	if targetKB <= 4 {
+		numDiscounts = g.faker.IntRange(0, 1) // 0-1 for small docs
+	} else {
+		numDiscounts = g.faker.IntRange(0, 2)
+	}
 	discounts := make([]Discount, numDiscounts)
 	for i := 0; i < numDiscounts; i++ {
 		discounts[i] = Discount{
@@ -345,8 +372,13 @@ func (g *Generator) generateOrder(baseTime time.Time) Order {
 		}
 	}
 	
-	// Add taxes
-	numTaxes := g.faker.IntRange(1, 3)
+	// Add taxes - fewer for smaller documents
+	var numTaxes int
+	if targetKB <= 4 {
+		numTaxes = 1 // Always 1 for small docs
+	} else {
+		numTaxes = g.faker.IntRange(1, 3)
+	}
 	taxes := make([]Tax, numTaxes)
 	for i := 0; i < numTaxes; i++ {
 		taxRate := g.faker.Float64Range(0.05, 0.15)
