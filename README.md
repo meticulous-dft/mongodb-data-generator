@@ -45,18 +45,6 @@ curl -L -o gendata https://github.com/meticulous-dft/mongodb-data-generator/rele
 chmod +x gendata
 ```
 
-#### From Workflow Artifacts
-
-If a release hasn't been created yet, you can download binaries from the workflow artifacts:
-
-1. Go to the [Actions tab](https://github.com/meticulous-dft/mongodb-data-generator/actions)
-2. Click on the latest successful workflow run
-3. Scroll down to "Artifacts" section
-4. Download the appropriate artifact for your platform (e.g., `gendata-linux-amd64` or `gendata-linux-arm64`)
-5. Extract and use the binary
-
-**Note**: Artifacts are retained for 90 days.
-
 ### Build from Source
 
 ```bash
@@ -170,28 +158,26 @@ Example output:
 
 ### YCSB-Style Logging
 
-The tool generates YCSB (Yahoo! Cloud Serving Benchmark) style logs to a file (default: `ycsb.log`). Statistics are logged every 10 seconds during execution, showing cumulative metrics from the start. The log includes:
+The tool generates YCSB (Yahoo! Cloud Serving Benchmark) style logs to a file (default: `ycsb.log`). Statistics are logged every 10 seconds during execution in a single-line progress report format.
 
-- Overall runtime and throughput
-- Operation counts (INSERT operations)
-- Latency statistics (average, min, max, 95th percentile, 99th percentile)
-- Success and error counts
+Each log line includes:
+- **Timestamp**: Current time with milliseconds
+- **Duration**: Elapsed time since start (in seconds)
+- **Total operations**: Cumulative number of operations completed
+- **Current ops/sec**: Operations per second in the last 10-second period
+- **Estimated completion**: Estimated time remaining based on target size and current throughput
+- **Operation statistics**: Per-operation type (INSERT) stats including:
+  - Count, Max, Min, Average latency (in microseconds)
+  - Percentiles: 90th, 99th, 99.9th, and 99.99th
 
 Example log output (logged every 10 seconds):
 ```
-=== Stats at 2024-01-15T10:30:00Z (elapsed: 30s) ===
-[OVERALL], RunTime(ms), 30000
-[OVERALL], Throughput(ops/sec), 12500.50
-[INSERT], Operations, 375015
-[INSERT], AverageLatency(us), 125.50
-[INSERT], MinLatency(us), 45
-[INSERT], MaxLatency(us), 2500
-[INSERT], 95thPercentileLatency(us), 350
-[INSERT], 99thPercentileLatency(us), 850
-[INSERT], Return=OK, Count, 375015
+[2025/11/05 13:00:36.123] [info   ] [mongodb-data-generator] 2025-11-05 13:00:36:123 10 sec: 96595 operations; 9659.5 current ops/sec; est completion in 2 hours 30 minutes [INSERT: Count=96595, Max=59509, Min=125, Avg=525.09, 90=1325, 99=2064, 99.9=31263, 99.99=32607]
+[2025/11/05 13:00:46.234] [info   ] [mongodb-data-generator] 2025-11-05 13:00:46:234 20 sec: 195495 operations; 9893.0 current ops/sec; est completion in 2 hours 25 minutes [INSERT: Count=195495, Max=59509, Min=125, Avg=530.90, 90=1291, 99=2163, 99.9=31279, 99.99=31631]
+[2025/11/05 13:00:56.345] [info   ] [mongodb-data-generator] 2025-11-05 13:00:56:345 30 sec: 296922 operations; 10142.7 current ops/sec; est completion in 2 hours 20 minutes [INSERT: Count=296922, Max=59509, Min=123, Avg=527.42, 90=1229, 99=2064, 99.9=31263, 99.99=32607]
 ```
 
-The log file is written periodically (every 10 seconds) and finalized with a summary on completion or shutdown.
+The log file is written periodically (every 10 seconds) and finalized with a final statistics line on completion or shutdown.
 
 ## Development
 
