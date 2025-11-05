@@ -1,6 +1,7 @@
 package model
 
 import (
+	"crypto/rand"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v7"
@@ -442,18 +443,22 @@ func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 	return padding, nil
 }
 
-// generateCompressionResistantPadding generates high-entropy padding quickly
+// generateCompressionResistantPadding generates high-entropy padding using crypto/rand
+// This creates truly random data that resists compression algorithms
 func (g *Generator) generateCompressionResistantPadding(size int) string {
 	padding := make([]byte, size)
 	
-	// Fast pseudo-random using linear feedback shift register (LFSR)
-	// This is fast and creates high-entropy data that resists compression
-	seed := uint32(uint64(time.Now().UnixNano()) ^ uint64(size))
-	
-	for i := 0; i < size; i++ {
-		// LFSR: fast, deterministic, high entropy
-		seed = (seed << 1) ^ ((seed >> 31) & 0xD0000001)
-		padding[i] = byte(seed ^ (seed >> 8) ^ (seed >> 16) ^ (seed >> 24))
+	// Use crypto/rand for true randomness - this is the best compression resistance
+	// While it's slightly slower than LFSR, it's still fast enough and provides
+	// maximum entropy that compression algorithms cannot compress
+	_, err := rand.Read(padding)
+	if err != nil {
+		// Fallback to LFSR if crypto/rand fails (shouldn't happen)
+		seed := uint32(uint64(time.Now().UnixNano()) ^ uint64(size))
+		for i := 0; i < size; i++ {
+			seed = (seed << 1) ^ ((seed >> 31) & 0xD0000001)
+			padding[i] = byte(seed ^ (seed >> 8) ^ (seed >> 16) ^ (seed >> 24))
+		}
 	}
 	
 	return string(padding)

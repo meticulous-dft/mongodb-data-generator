@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -56,12 +57,22 @@ func NewWriter(config Config) (*Writer, error) {
 		config.WriterCount = 5 // Multiple writers for better throughput
 	}
 
+	// Append compressors=disabled to connection string to disable compression
+	connectionString := config.ConnectionString
+	if !strings.Contains(connectionString, "compressors=") {
+		separator := "&"
+		if !strings.Contains(connectionString, "?") {
+			separator = "?"
+		}
+		connectionString = connectionString + separator + "compressors=disabled"
+	}
+	
 	// Create MongoDB client with optimized settings
 	// Use W:1, J:false for maximum throughput
 	wc := writeconcern.New(writeconcern.W(1), writeconcern.J(false))
-
+	
 	clientOptions := options.Client().
-		ApplyURI(config.ConnectionString).
+		ApplyURI(connectionString).
 		SetMaxPoolSize(uint64(config.WriterCount * 10)).
 		SetMinPoolSize(uint64(config.WriterCount)).
 		SetWriteConcern(wc).
