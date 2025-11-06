@@ -104,13 +104,15 @@ jobs:
           
           ## Quick Download
           
+          Use the \`latest\` tag to always get the most recent build:
+          
           \`\`\`bash
           # For x86_64
-          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-amd64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-amd64
           chmod +x gendata
           
           # For ARM64
-          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-arm64
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-arm64
           chmod +x gendata
           \`\`\`
           
@@ -118,7 +120,7 @@ jobs:
           
           \`\`\`bash
           # Download checksum
-          curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/gendata-linux-amd64.sha256
+          curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-amd64.sha256
           
           # Verify
           shasum -a 256 -c gendata-linux-amd64.sha256
@@ -134,13 +136,31 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
             IS_PRERELEASE=false
+            USE_LATEST_TAG=false
           else
-            VERSION="latest-$(git rev-parse --short HEAD)"
+            # For main branch, use 'latest' tag for easy downloads
+            VERSION="latest"
             IS_PRERELEASE=true
+            USE_LATEST_TAG=true
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "use_latest_tag=$USE_LATEST_TAG" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION"
+
+      - name: Create or update latest tag
+        if: steps.version.outputs.use_latest_tag == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Delete the latest tag if it exists (both locally and remotely)
+          git tag -d latest 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+          
+          # Create new latest tag pointing to current commit
+          git tag -f latest
+          git push origin latest --force
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
