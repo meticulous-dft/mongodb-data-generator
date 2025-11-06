@@ -22,6 +22,9 @@ jobs:
           - os: linux
             arch: arm64
             goarch: arm64
+          - os: darwin
+            arch: arm64
+            goarch: arm64
 
     steps:
       - name: Checkout code
@@ -95,10 +98,11 @@ jobs:
           cat > release/README.md << EOF
           # Download Binaries
           
-          Download the appropriate binary for your Linux platform:
+          Download the appropriate binary for your platform:
           
           - **Linux x86_64 (amd64)**: [gendata-linux-amd64](gendata-linux-amd64)
           - **Linux ARM64**: [gendata-linux-arm64](gendata-linux-arm64)
+          - **macOS ARM64 (Apple Silicon)**: [gendata-darwin-arm64](gendata-darwin-arm64)
           
           Each binary includes a corresponding \`.sha256\` checksum file for verification.
           
@@ -107,19 +111,23 @@ jobs:
           Use the \`latest\` tag to always get the most recent build:
           
           \`\`\`bash
-          # For x86_64
+          # Linux x86_64
           curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-amd64
           chmod +x gendata
           
-          # For ARM64
+          # Linux ARM64
           curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-arm64
+          chmod +x gendata
+          
+          # macOS ARM64 (Apple Silicon)
+          curl -L -o gendata https://github.com/${{ github.repository }}/releases/download/latest/gendata-darwin-arm64
           chmod +x gendata
           \`\`\`
           
           ## Verify Checksum
           
           \`\`\`bash
-          # Download checksum
+          # Download checksum (example for Linux amd64)
           curl -L -o gendata-linux-amd64.sha256 https://github.com/${{ github.repository }}/releases/download/latest/gendata-linux-amd64.sha256
           
           # Verify
