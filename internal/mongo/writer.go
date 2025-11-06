@@ -60,17 +60,27 @@ func NewWriter(config Config) (*Writer, error) {
 	// Append compressors=disabled to connection string to disable compression
 	connectionString := config.ConnectionString
 	if !strings.Contains(connectionString, "compressors=") {
-		separator := "&"
-		if !strings.Contains(connectionString, "?") {
-			separator = "?"
+		// Ensure connection string has / before adding query parameters
+		// MongoDB connection strings require / before ? (e.g., mongodb+srv://host/?options)
+		hasQueryParams := strings.Contains(connectionString, "?")
+
+		if !hasQueryParams {
+			// If no query params exist, ensure connection string ends with /
+			if !strings.HasSuffix(connectionString, "/") {
+				connectionString = connectionString + "/"
+			}
+			// Add ?compressors=disabled
+			connectionString = connectionString + "?compressors=disabled"
+		} else {
+			// Query params already exist, just append &compressors=disabled
+			connectionString = connectionString + "&compressors=disabled"
 		}
-		connectionString = connectionString + separator + "compressors=disabled"
 	}
-	
+
 	// Create MongoDB client with optimized settings
 	// Use W:1, J:false for maximum throughput
 	wc := writeconcern.New(writeconcern.W(1), writeconcern.J(false))
-	
+
 	clientOptions := options.Client().
 		ApplyURI(connectionString).
 		SetMaxPoolSize(uint64(config.WriterCount * 10)).
@@ -92,9 +102,9 @@ func NewWriter(config Config) (*Writer, error) {
 	if err := client.Ping(ctx, nil); err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
-	
+
 	database := client.Database(config.DatabaseName)
-	
+
 	// Create collection with WiredTiger storage compression disabled
 	// This ensures storage size matches logical size for performance testing
 	createOpts := options.CreateCollection().
@@ -103,7 +113,7 @@ func NewWriter(config Config) (*Writer, error) {
 				{Key: "configString", Value: "block_compressor=none"},
 			}},
 		})
-	
+
 	// Try to create collection (ignore error if it already exists)
 	err = database.CreateCollection(ctx, config.CollectionName, createOpts)
 	if err != nil && !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "NamespaceExists") {
@@ -111,7 +121,7 @@ func NewWriter(config Config) (*Writer, error) {
 		// The collection might already exist or we might not have permissions
 		// In that case, we'll use the existing collection
 	}
-	
+
 	collection := database.Collection(config.CollectionName)
 
 	return &Writer{

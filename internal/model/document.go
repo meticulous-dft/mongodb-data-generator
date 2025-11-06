@@ -235,7 +235,9 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 	// Orders: scale aggressively with target size to fill most of the document
 	// For 64KB, we want ~50KB+ of meaningful data, so need many orders
 	if targetKB <= 2 {
-		doc.Orders = []Order{} // No orders for 2KB
+		// For 2KB, add 1 small order to increase base document size
+		doc.Orders = make([]Order, 1)
+		doc.Orders[0] = g.generateOrder(now, targetKB)
 	} else {
 		numOrders := g.calculateOrderCount()
 		doc.Orders = make([]Order, numOrders)
@@ -246,7 +248,11 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 	
 	// Metadata: scale with target size
 	if targetKB <= 2 {
-		doc.Metadata = nil
+		// For 2KB, add minimal metadata to increase base document size
+		doc.Metadata = make(map[string]interface{})
+		doc.Metadata["created_by"] = "system"
+		doc.Metadata["source"] = g.faker.Word()
+		doc.Metadata["region"] = g.faker.State()
 	} else if targetKB <= 4 {
 		doc.Metadata = make(map[string]interface{})
 		doc.Metadata["created_by"] = "system"
@@ -259,8 +265,9 @@ func (g *Generator) Generate() (*CustomerDocument, error) {
 	
 	// Notes and tags: scale with target size
 	if targetKB <= 2 {
-		doc.Notes = nil
-		doc.Tags = nil
+		// For 2KB, add minimal notes and tags to increase base document size
+		doc.Notes = []string{g.faker.Sentence(15)}
+		doc.Tags = []string{g.faker.Word(), g.faker.Word(), g.faker.Word()}
 	} else if targetKB <= 4 {
 		doc.Notes = []string{g.faker.Sentence(10)}
 		doc.Tags = []string{g.faker.Word(), g.faker.Word()}
@@ -541,11 +548,22 @@ func (g *Generator) calculatePadding(doc *CustomerDocument) (string, error) {
 	// Calculate padding needed, accounting for BSON field overhead (~12 bytes)
 	paddingNeeded := targetSize - currentSize - 12
 
-	// Enforce that padding should not exceed 20% of target size
-	// This ensures meaningful data is at least 80% of the document
-	maxPadding := int(float64(targetSize) * 0.2)
+	// Enforce padding limits based on document size
+	// For larger documents (>= 8KB), limit padding to 20% to ensure meaningful data is majority
+	// For smaller documents (2-4KB), allow up to 30% padding to ensure we reach target size
+	// For very small documents (< 2KB), allow up to 40% padding if needed
+	var maxPaddingPercent float64
+	if targetSize >= 8*1024 {
+		maxPaddingPercent = 0.2 // 20% for large documents
+	} else if targetSize >= 4*1024 {
+		maxPaddingPercent = 0.3 // 30% for medium documents
+	} else {
+		maxPaddingPercent = 0.4 // 40% for small documents (2KB)
+	}
+	
+	maxPadding := int(float64(targetSize) * maxPaddingPercent)
 	if paddingNeeded > maxPadding {
-		// If base document is too small, cap padding at 20% of target
+		// If base document is too small, cap padding at the calculated percentage
 		paddingNeeded = maxPadding
 	}
 
